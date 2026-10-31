@@ -26,6 +26,7 @@ def write_report(rows: list[dict], planned: int, path: Path, mode: str) -> None:
     counts = Counter((row['expected'],row['verdict']) for row in completed)
     text = ['# Simulated-pair evaluation','',
             'All after images are simulated repairs or deliberately mismatched/reused evidence. This measures synthetic consistency, not real-world repair accuracy.', '',
+            'Thresholds were tuned on these simulated pairs; this is not an independent held-out evaluation.', '',
             f'Mask mode: `{mode}`. Marked ROIs are supplied; optional YOLO suggestions are not required.',
             f'Planned: {planned}; completed: {len(completed)}; errors: {len(errors)}; unattempted: {planned-len(rows)}.','']
     if completed:

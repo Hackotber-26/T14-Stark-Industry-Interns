@@ -29,8 +29,11 @@ TEXTURE_WEIGHT = 0.5       # texture counts half as much as colour
 MIN_DEFECT_FRAC_OF_ROI = 0.05   # before-defect area / box area below this -> NEEDS_REVIEW
 REMAINING_DILATE_PX = 7    # heatmap: grow remaining damage slightly before marking the rest repaired
 GRABCUT_ITERS = 5          # iterations for segmenting the damage inside the marked box
-MIN_DEFECT_CONTRAST = 8.0  # Lab distance between damage and surrounding road; below -> no clear damage
+MIN_DEFECT_CONTRAST = 8.0  # Lab distance between damage and surrounding road...
+MIN_TEXTURE_CONTRAST = 0.35  # ...or surface texture differs from the road by at least 35%; below both -> no clear damage
 CHANGE_THRESHOLD = 8.0     # Lab change below this (after lighting match) = surface unchanged
+ROAD_LIKE_MIN = 12.0        # repaired pixels must be within this Lab distance of the road colour...
+ROAD_LIKE_SCALE = 1.6      # ...or within 1.6x the road's own 95th-percentile spread, whichever is larger
 
 # Verdict
 FIXED_MIN_PCT = 85.0

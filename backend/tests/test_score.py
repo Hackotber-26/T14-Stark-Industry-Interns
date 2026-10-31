@@ -80,3 +80,61 @@ def test_mock_detector_returns_no_suggestion(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("FIXCHECK_MOCK_SEG", "1")
     detector = DefectDetector(weights_path="/nonexistent/never-load.pt", device="cpu")
     assert detector.suggest_roi(np.zeros((480, 640, 3), dtype=np.uint8)) == (None, 0.0)
+
+
+@pytest.mark.parametrize('plain', [False, True])
+def test_anomaly_fallback_when_grabcut_is_empty(
+    road_case: tuple, monkeypatch: pytest.MonkeyPatch, plain: bool
+) -> None:
+    """Fallback recovers clear damage while rejecting undamaged road."""
+    road, before, ellipse, roi, _ = road_case
+
+    def empty_grabcut(image, seeds, rect, background, foreground, iterations, mode):
+        seeds[:] = cv2.GC_BGD
+
+    monkeypatch.setattr(cv2, 'grabCut', empty_grabcut)
+    mask = defect_mask(road if plain else before, roi)
+    if plain:
+        assert not np.any(mask)
+    else:
+        overlap = np.count_nonzero((mask > 0) & (ellipse > 0))
+        assert overlap / np.count_nonzero(ellipse) >= 0.70
+        assert mask.dtype == np.uint8
+        assert set(np.unique(mask)) <= {0, 255}
+
+
+@pytest.mark.parametrize('repaired,expected', [(False, 'NOT_FIXED'), (True, 'FIXED')])
+def test_real_photo_pair_pipeline(tmp_path, repaired: bool, expected: str) -> None:
+    """Verify local photo pairs through the same entry point as check_pair."""
+    import json
+    from pathlib import Path
+
+    from backend.pipeline.align import resize_max_side
+    from backend.pipeline.run import verify
+    from backend.pipeline.score import roi_to_mask
+
+    raw = Path(__file__).resolve().parents[2] / 'data' / 'raw'
+    before = cv2.imread(str(raw / 'pothole_9.jpg'))
+    assert before is not None, 'The local pothole_9.jpg test photo is required'
+    before = resize_max_side(before)
+    roi = json.loads((raw / 'rois.json').read_text())['pothole_9.jpg']
+    if repaired:
+        after = cv2.inpaint(before, roi_to_mask(before.shape, roi), 9, cv2.INPAINT_TELEA)
+    else:
+        h, w = before.shape[:2]
+        transform = cv2.getRotationMatrix2D((w / 2, h / 2), 1.0, 1.0)
+        transform[:, 2] += [4, -3]
+        after = cv2.warpAffine(before, transform, (w, h), borderMode=cv2.BORDER_REFLECT_101)
+        after = np.clip(after.astype(np.float32) * 1.10, 0, 255).astype(np.uint8)
+    before_path, after_path = tmp_path / 'before.png', tmp_path / 'after.png'
+    assert cv2.imwrite(str(before_path), before)
+    assert cv2.imwrite(str(after_path), after)
+    output = tmp_path / 'result'
+    result = verify(str(before_path), str(after_path), 'REAL-PAIR-TEST',
+                    None, None, roi, [], str(output))
+    assert result['checks']['scene']['status'] == 'pass', result
+    assert result['verdict'] == expected, result
+    assert result['percent_resolved'] is not None
+    for name in ('after_aligned', 'heatmap'):
+        assert result['images'][name]
+        assert cv2.imread(str(output / f'{name}.jpg')) is not None
