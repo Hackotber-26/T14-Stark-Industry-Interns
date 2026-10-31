@@ -24,10 +24,8 @@ def verify(before_path: str, after_path: str, complaint_id: str,
         timings[name] = round((perf_counter()-tick)*1000, 2)
         return result
 
-    before = cv2.imread(before_path)
-    after = cv2.imread(after_path)
-    if before is None or after is None:
-        raise ValueError('Upload valid before and after images')
+    before = exif.read_bgr(before_path)
+    after = exif.read_bgr(after_path)
     before = align.resize_max_side(before)
     after = align.resize_max_side(after)
     before_ll = before_ll if before_ll is not None else exif.read_gps(before_path)

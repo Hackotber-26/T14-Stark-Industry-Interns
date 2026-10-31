@@ -1,5 +1,9 @@
-"""Read optional GPS coordinates from image metadata."""
-from PIL import Image
+"""Decode upright photos and optional GPS coordinates."""
+from typing import BinaryIO
+import cv2
+import numpy as np
+from PIL import Image, ImageOps
+from .config import MAX_SIDE
 from .types import LatLon
 
 
@@ -22,3 +26,19 @@ def read_gps(image_path: str) -> LatLon | None:
         return LatLon(lat, lon)
     except (OSError, ValueError, TypeError, KeyError, IndexError, AttributeError, ZeroDivisionError):
         return None
+
+
+class UnreadableImage(ValueError):
+    """The supplied file cannot be decoded as an image."""
+
+
+def read_bgr(source: str | BinaryIO) -> np.ndarray:
+    """Decode upright image pixels and shrink phone photos before allocating BGR."""
+    try:
+        with Image.open(source) as image:
+            upright = ImageOps.exif_transpose(image)
+            upright.thumbnail((MAX_SIDE, MAX_SIDE), Image.Resampling.LANCZOS)
+            rgb = np.asarray(upright.convert('RGB'))
+            return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError) as error:
+        raise UnreadableImage('Unreadable image. Upload a valid JPEG or PNG photo.') from error

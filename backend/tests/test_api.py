@@ -1,5 +1,7 @@
 """API integration tests with isolated storage and pending B contracts replaced."""
 import json
+from io import BytesIO
+from PIL import Image
 from types import SimpleNamespace
 import cv2
 import numpy as np
@@ -99,9 +101,10 @@ def test_invalid_upload_and_gps(client):
     assert upload(client,before_lat='12').status_code == 422
     assert upload(client,before_lat='91',before_lon='77').status_code == 422
     response = client.post('/api/verify',data={'complaint_id':'x','roi':json.dumps(ROI)},files={'before':('x',b'bad'),'after':('x',b'bad')})
-    assert response.status_code == 422
-    assert client.post('/api/suggest-roi',files={'before':('bad',b'bad')}).status_code == 422
-    assert client.post('/api/suggest-roi',files={'before':('empty',b'')}).status_code == 422
+    assert response.status_code == 400
+    assert 'JPEG or PNG' in response.json()['detail']
+    assert client.post('/api/suggest-roi',files={'before':('bad',b'bad')}).status_code == 400
+    assert client.post('/api/suggest-roi',files={'before':('empty',b'')}).status_code == 400
 
 
 def test_suggest_roi(client):
@@ -185,3 +188,57 @@ def test_partial_split_follows_damage_bounds(monkeypatch):
     pairs.make_after(image, ROI, 'partial', 0)
     assert np.count_nonzero(captured[0][:, :20]) == 400
     assert not np.any(captured[0][:, 20:])
+
+
+@pytest.mark.parametrize('format', ['JPEG', 'PNG'])
+def test_large_phone_photos(client, format):
+    photo = Image.new('RGB', (4000, 3000), (50, 100, 150))
+    data = BytesIO()
+    photo.save(data, format=format)
+    files = {name: ('phone.'+format.lower(), data.getvalue()) for name in ('before', 'after')}
+    response = client.post('/api/verify', data={'complaint_id':'phone-large', 'roi':json.dumps(ROI)}, files=files)
+    assert response.status_code == 200, response.text
+    saved = cv2.imread(str(main.RUNS_DIR/response.json()['id']/'before.jpg'))
+    assert saved.shape == (768, 1024, 3)
+    suggestion = client.post('/api/suggest-roi', files={'before':files['before']})
+    assert suggestion.status_code == 200
+
+
+def test_phone_orientation_matches_displayed_pixels_and_registered_hash(client, monkeypatch):
+    from backend.pipeline.dedupe import phash_hex
+    upright = Image.fromarray(cv2.cvtColor(textured(), cv2.COLOR_BGR2RGB))
+    raw = upright.transpose(Image.Transpose.ROTATE_90)
+    metadata = Image.Exif()
+    metadata[274] = 6  # Stored pixels need a clockwise quarter turn for display.
+    oriented, plain = BytesIO(), BytesIO()
+    raw.save(oriented, format='JPEG', quality=95, exif=metadata)
+    upright.save(plain, format='PNG')
+    seen = []
+    monkeypatch.setattr(run.segment, 'get_detector', lambda: SimpleNamespace(suggest_roi=lambda image: (seen.append(image.copy()) or ROI, .8)))
+    assert client.post('/api/suggest-roi', files={'before':('phone.jpg',oriented.getvalue())}).status_code == 200
+    response = client.post('/api/verify', data={'complaint_id':'phone-rotated', 'roi':json.dumps(ROI)},
+                           files={'before':('phone.jpg',oriented.getvalue()), 'after':('plain.png',plain.getvalue())})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    saved = cv2.imread(str(main.RUNS_DIR/result['id']/'before.jpg'))
+    assert saved.shape == seen[0].shape == (600, 800, 3)
+    assert np.abs(saved.astype(float)-seen[0]).mean() < 5
+    assert result['checks']['scene']['status'] == 'pass'
+    # Register the oriented input as after evidence too.
+    response = client.post('/api/verify', data={'complaint_id':'phone-after', 'roi':json.dumps(ROI)},
+                           files={'before':('plain.png',plain.getvalue()), 'after':('phone.jpg',oriented.getvalue())})
+    assert response.status_code == 200
+    assert ('phone-after', phash_hex(seen[0])) in store.all_hashes()
+
+
+@pytest.mark.parametrize('bad', [b'', b'not an image', b'\xff\xd8\xff\xe0' + bytes(40)])
+@pytest.mark.parametrize('side', ['before', 'after'])
+def test_unreadable_photos_return_400_and_leave_no_results(client, bad, side):
+    valid = BytesIO()
+    Image.new('RGB',(30,20)).save(valid,format='PNG')
+    files = {name:('photo.png',bad if name==side else valid.getvalue()) for name in ('before','after')}
+    response = client.post('/api/verify',data={'complaint_id':'broken','roi':json.dumps(ROI)},files=files)
+    assert response.status_code == 400
+    assert response.json()['detail'] == 'Unreadable image. Upload a valid JPEG or PNG photo.'
+    assert store.list_results() == [] and store.all_hashes() == []
+    assert list(main.RUNS_DIR.iterdir()) == []

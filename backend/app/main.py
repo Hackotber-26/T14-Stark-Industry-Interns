@@ -12,7 +12,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from . import store
-from ..pipeline import run, segment, dedupe, align
+from ..pipeline import run, segment, dedupe, exif
 from ..pipeline.types import LatLon
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,9 +37,11 @@ def _cases():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     for folder, meta in _cases():
-        image = cv2.imread(str(folder / 'after.jpg'))
-        if image is not None:
-            store.add_hash(meta['complaint_id'], dedupe.phash_hex(align.resize_max_side(image)))
+        try:
+            image = exif.read_bgr(str(folder / 'after.jpg'))
+        except exif.UnreadableImage:
+            continue
+        store.add_hash(meta['complaint_id'], dedupe.phash_hex(image))
     yield
 
 
@@ -100,12 +102,15 @@ def _perform(before, after, complaint_id, before_ll, after_ll, roi, folder, meta
             result.update(case_id=meta['case_id'], simulated=meta.get('simulated', False))
             result['location']['ward'] = meta.get('ward')
         store.save_result(result)
-        image = cv2.imread(str(after))
-        store.add_hash(complaint_id, dedupe.phash_hex(align.resize_max_side(image)))
+        image = exif.read_bgr(str(after))
+        store.add_hash(complaint_id, dedupe.phash_hex(image))
         return result
     except run.RoiRequired as error:
         shutil.rmtree(folder, ignore_errors=True)
         raise HTTPException(422, str(error)) from error
+    except exif.UnreadableImage as error:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise HTTPException(400, str(error)) from error
     except ValueError as error:
         shutil.rmtree(folder, ignore_errors=True)
         raise HTTPException(422, str(error)) from error
@@ -149,13 +154,11 @@ def verify(before: UploadFile = File(...), after: UploadFile = File(...), compla
 
 @app.post('/api/suggest-roi')
 def suggest(before: UploadFile = File(...)):
-    data = before.file.read()
-    if not data:
-        raise HTTPException(422, 'Upload a valid before image')
-    image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
-    if image is None:
-        raise HTTPException(422, 'Upload a valid before image')
-    roi, confidence = segment.get_detector().suggest_roi(align.resize_max_side(image))
+    try:
+        image = exif.read_bgr(before.file)
+    except exif.UnreadableImage as error:
+        raise HTTPException(400, str(error)) from error
+    roi, confidence = segment.get_detector().suggest_roi(image)
     return {'roi': roi, 'confidence': float(confidence)}
 
 

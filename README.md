@@ -6,7 +6,7 @@ FixCheck compares before and after pothole photos to verify whether a reported r
 
 ## What it does
 
-- Run five demo cases or upload your own before/after photos and mark the pothole with a box.
+- Run five demo cases or upload your own before/after photos and mark the pothole with a box. Large JPEG/PNG photos are resized for processing, and phone EXIF orientation is respected.
 - Check GPS distance, reused evidence, and whether both photos show the same scene.
 - Align the photos, measure changes within the original damage, and assess patch quality.
 - Show an image comparison and a repair heatmap, with a persistent local results ledger.
@@ -87,6 +87,8 @@ Check the running backend:
 curl --fail http://localhost:8000/api/health
 bash scripts/smoke.sh
 ```
+
+Unreadable image files return HTTP 400 with a clear JPEG/PNG upload message. Missing or invalid marked boxes return HTTP 422.
 
 The local database is `data/fixcheck.db`; generated evidence is under `data/runs/`. Both are ignored by version control. Demo photos are served under `/demo-files/`, generated evidence under `/files/`, and results under `/api/results`.
 
