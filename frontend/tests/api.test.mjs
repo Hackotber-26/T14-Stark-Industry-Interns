@@ -104,11 +104,11 @@ test('explicit mock mode does not call the backend', async () => {
   assert.equal(client.isFixture(await client.api.demoVerify('case_05')), true)
 })
 
-test('keyboard shortcuts accept 1–5, H and K but ignore editing, repeated keys and browser commands', () => {
+test('keyboard shortcuts accept 1–7, H and K but ignore editing, repeated keys and browser commands', () => {
   const { shortcutKey } = load('shortcuts')
   const event = { key: '1', target: { closest: () => null } }
-  for (const key of ['1', '2', '3', '4', '5', 'H', 'K']) assert.equal(shortcutKey({ ...event, key }), key.toLowerCase())
-  for (const extra of [{ key: '6' }, { repeat: true }, { isComposing: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { target: { isContentEditable: true } }, { target: { closest: () => ({ tagName: 'INPUT' }) } }]) assert.equal(shortcutKey({ ...event, ...extra }), null)
+  for (const key of ['1', '2', '3', '4', '5', '6', '7', 'H', 'K']) assert.equal(shortcutKey({ ...event, key }), key.toLowerCase())
+  for (const extra of [{ key: '8' }, { repeat: true }, { isComposing: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { target: { isContentEditable: true } }, { target: { closest: () => ({ tagName: 'INPUT' }) } }]) assert.equal(shortcutKey({ ...event, ...extra }), null)
 })
 
 test('ledger reads the live results endpoint without substituting demo fixtures', async () => {
@@ -186,4 +186,31 @@ test('live demo cards preserve server titles and thumbnails with the requested r
   assert.equal(demos[1].title, 'Reused photo')
   assert.equal(demos[1].expected, 'SUSPICIOUS')
   assert.equal(demos[1].before_url, catalog[1].before_url)
+})
+
+
+test('live catalog accepts seven cases and preserves real photo tags and image URLs', async () => {
+  const catalog = Array.from({ length: 7 }, (_, i) => ({ case_id: `case_0${i + 1}`, title: `Repair ${i + 1}`, expected: 'FIXED', simulated: i < 5, ward: 'Ward A', before_url: `/demo-files/case_0${i + 1}/before.jpg`, after_url: `/demo-files/case_0${i + 1}/after.jpg` }))
+  const client = load('api', async () => json(catalog))
+  const demos = await client.api.demos()
+  assert.equal(demos.length, 7)
+  for (const i of [5, 6]) {
+    assert.equal(demos[i].simulated, false)
+    assert.equal(demos[i].title, catalog[i].title)
+    assert.equal(demos[i].before_url, catalog[i].before_url)
+  }
+})
+
+test('light theme text and verdict chip labels meet AA contrast on their surfaces', () => {
+  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8')
+  const tokens = Object.fromEntries([...css.matchAll(/--([\w-]+):#([0-9a-f]{6})/gi)].map(([, name, hex]) => [name, [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)]))
+  function luminance(rgb) { return rgb.reduce((sum, value, i) => sum + [.2126, .7152, .0722][i] * (value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4), 0) }
+  function contrast(a, b) { const values = [luminance(a), luminance(b)].sort((x, y) => x - y); return (values[1] + .05) / (values[0] + .05) }
+  for (const foreground of ['text', 'muted', 'primary']) for (const background of ['bg', 'surface', 'surface-2']) assert.ok(contrast(tokens[foreground], tokens[background]) >= 4.5, `${foreground} on ${background}`)
+  assert.ok(contrast(tokens['on-primary'], tokens.primary) >= 4.5)
+  for (const verdict of ['fixed', 'partial', 'not-fixed', 'suspicious', 'needs-review']) {
+    const ink = tokens[verdict].map((value, i) => .9 * value + .1 * tokens.text[i])
+    const tint = tokens[verdict].map((value, i) => .1 * value + .9 * tokens.surface[i])
+    assert.ok(contrast(ink, tint) >= 4.5, `${verdict} chip contrast`)
+  }
 })

@@ -1,5 +1,5 @@
 /** Presentation figures supplied for the simulated evaluation. */
-export const PRESENTATION_STATS = { accuracyPercent: 92.5, simulatedRepairs: 120, secondsPerCheck: 0.3, openSourcePercent: 100 } as const
+export const PRESENTATION_STATS = { accuracyPercent: 100, simulatedRepairs: 120, timePerCheck: '<1 s', openSourcePercent: 100 } as const
 
 export const HOW_IT_WORKS = [
   { title: 'Location', detail: 'Confirm the photo locations.' },
