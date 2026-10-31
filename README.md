@@ -106,7 +106,7 @@ node --test frontend/tests/api.test.mjs
 
 Photo boxes come from `data/raw/rois.json`. Generation uses measured damage when available and warns when it falls back to an ellipse. Inspect `data/demo/_preview.jpg` after regeneration. Evaluation writes [docs/RESULTS.md](docs/RESULTS.md), with generated evidence under `data/runs/eval/`.
 
-The recorded evaluation of **120 simulated repair pairs** matched the intended verdict on **102/120 pairs (85.0%)**, with an average verification time of **277.1 ms**. The remaining 18 returned `NEEDS_REVIEW`. These figures measure synthetic consistency, not real-world repair accuracy or full upload latency. The five demo cases cover full repair, partial repair, no repair, wrong location, and reused evidence.
+The recorded evaluation of **120 simulated repair pairs** matched the intended verdict on **111/120 pairs (92.5%)**, with an average verification time of **293.3 ms**. The remaining 9 returned `NEEDS_REVIEW`. These figures measure synthetic consistency, not real-world repair accuracy or full upload latency. The five demo cases cover full repair, partial repair, no repair, wrong location, and reused evidence.
 
 ## Demo honesty and photo credit
 
