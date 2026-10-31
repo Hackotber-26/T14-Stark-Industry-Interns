@@ -90,7 +90,7 @@ bash scripts/smoke.sh
 
 Unreadable image files return HTTP 400 with a clear JPEG/PNG upload message. Missing or invalid marked boxes return HTTP 422.
 
-The local database is `data/fixcheck.db`; generated evidence is under `data/runs/`. Both are ignored by version control. Demo photos are served under `/demo-files/`, generated evidence under `/files/`, and results under `/api/results`.
+The local database is `data/fixcheck.db`; generated evidence is under `data/runs/`. Both are ignored by version control. Demo photos are served under `/demo-files/`, generated evidence under `/files/`, and results under `/api/results`. Download an evidence report at `/api/results/{id}/report.pdf`; the report includes English and notes when Kannada cannot be rendered with the available PDF fonts.
 
 ## Reproduce the demo and evaluation
 

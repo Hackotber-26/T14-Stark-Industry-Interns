@@ -4,6 +4,7 @@ import json
 import math
 import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 import shutil
 from uuid import uuid4
 import cv2
@@ -11,7 +12,9 @@ import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from . import store
+from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+from . import store, report
 from ..pipeline import run, segment, dedupe, exif
 from ..pipeline.types import LatLon
 
@@ -173,3 +176,21 @@ def result(id: str):
     if value is None:
         raise HTTPException(404, 'Result not found')
     return value
+
+
+@app.get('/api/results/{id}/report.pdf')
+def result_report(id: str):
+    """Download an evidence report for an existing result."""
+    value = store.get_result(id)
+    if value is None:
+        raise HTTPException(404, 'Result not found')
+    # Each download has its own output file so concurrent requests cannot clash.
+    with NamedTemporaryFile(suffix='.pdf', prefix='report_', dir=RUNS_DIR, delete=False) as output:
+        path = Path(output.name)
+    try:
+        report.build_report(value, str(path))
+        return FileResponse(path, media_type='application/pdf', filename=f'{value["id"]}-report.pdf',
+                            background=BackgroundTask(path.unlink, missing_ok=True))
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise

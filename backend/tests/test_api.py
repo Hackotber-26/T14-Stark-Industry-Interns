@@ -1,5 +1,6 @@
 """API integration tests with isolated storage and pending B contracts replaced."""
 import json
+import re
 from io import BytesIO
 from PIL import Image
 from types import SimpleNamespace
@@ -21,8 +22,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(store, 'DB_PATH', tmp_path/'test.db')
     monkeypatch.setattr(main, 'DEMO_DIR', tmp_path/'demo')
     main.DEMO_DIR.mkdir()
-    monkeypatch.setattr(main, 'RUNS_DIR', tmp_path/'runs')
-    main.RUNS_DIR.mkdir()
+    monkeypatch.setattr(main, 'RUNS_DIR', tmp_path/'data/runs')
+    main.RUNS_DIR.mkdir(parents=True)
     # Keep the actual static mounts aligned with isolated test output.
     for route in main.app.routes:
         if getattr(route,'path',None) == '/files':
@@ -242,3 +243,42 @@ def test_unreadable_photos_return_400_and_leave_no_results(client, bad, side):
     assert response.json()['detail'] == 'Unreadable image. Upload a valid JPEG or PNG photo.'
     assert store.list_results() == [] and store.all_hashes() == []
     assert list(main.RUNS_DIR.iterdir()) == []
+
+
+@pytest.mark.parametrize('scene_matches', [True, False])
+def test_report_pdf_download(client, monkeypatch, scene_matches):
+    from backend.app import report
+    monkeypatch.setattr(report, '_ROOT', store.DB_PATH.parent)
+    response = upload(client, image=None if scene_matches else np.zeros((200,300,3),np.uint8))
+    assert response.status_code == 200
+    result = response.json()
+    response = client.get(f'/api/results/{result["id"]}/report.pdf')
+    assert response.status_code == 200
+    assert response.headers['content-type'] == 'application/pdf'
+    assert f'{result["id"]}-report.pdf' in response.headers['content-disposition']
+    assert response.content.startswith(b'%PDF-') and response.content.rstrip().endswith(b'%%EOF')
+    assert len(re.findall(rb'/Type\s*/Page\b', response.content)) == 1
+    assert b'/Subtype /Image' in response.content
+    assert not list(main.RUNS_DIR.glob('report_*.pdf'))
+
+
+def test_report_missing_result(client, monkeypatch):
+    from backend.app import report
+    def forbidden(*args):
+        raise AssertionError('A missing result must not build a PDF')
+    monkeypatch.setattr(report, 'build_report', forbidden)
+    response = client.get('/api/results/missing/report.pdf')
+    assert response.status_code == 404
+    assert response.json()['detail'] == 'Result not found'
+    assert not list(main.RUNS_DIR.glob('*.pdf'))
+
+
+def test_report_generation_failure_removes_temporary_file(client, monkeypatch):
+    from backend.app import report
+    result = upload(client).json()
+    def failed(value, path):
+        raise RuntimeError('Report generation failed')
+    monkeypatch.setattr(report, 'build_report', failed)
+    with pytest.raises(RuntimeError, match='Report generation failed'):
+        client.get(f'/api/results/{result["id"]}/report.pdf')
+    assert not list(main.RUNS_DIR.glob('report_*.pdf'))
