@@ -214,3 +214,10 @@ test('light theme text and verdict chip labels meet AA contrast on their surface
     assert.ok(contrast(ink, tint) >= 4.5, `${verdict} chip contrast`)
   }
 })
+
+
+test('invalid boxes are treated as absent for optional automatic measurement', () => {
+  const { isValidRoi } = load('api')
+  assert.equal(isValidRoi(fixture.roi), true)
+  for (const box of [null, [], [[.7,.2],[.2,.2],[.2,.8],[.7,.8]], [[.2,.8],[.7,.8],[.7,.2],[.2,.2]], [[.2,.2],[.2,.2],[.2,.8],[.2,.8]], [[-.1,0],[1,0],[1,1],[-.1,1]], [[NaN,0],[1,0],[1,1],[0,1]]]) assert.equal(isValidRoi(box), false)
+})

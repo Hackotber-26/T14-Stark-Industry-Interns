@@ -1,6 +1,7 @@
 """API integration tests with isolated storage and pending B contracts replaced."""
 import json
 import re
+import shutil
 from io import BytesIO
 from PIL import Image
 from types import SimpleNamespace
@@ -37,10 +38,6 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(run.score, 'percent_resolved', measure)
     monkeypatch.setattr(run.score, 'patch_quality', lambda *args: CheckResult('pass','Patch surface looks even',score=.9))
     monkeypatch.setattr(run.score, 'heatmap', lambda before,*args:before.copy())
-    def decide(location, duplicate, scene, score):
-        failed = [check.detail for check in (location,duplicate,scene) if check.status == 'fail']
-        return Decision('SUSPICIOUS' if failed else 'FIXED',.9,failed or ['Repair verified'])
-    monkeypatch.setattr(run.verdict, 'decide', decide)
     monkeypatch.setattr(run.explain, 'explain', lambda *args: {'en':'Repair verified','kn':'ದುರಸ್ತಿ ಪೂರ್ಣಗೊಂಡಿದೆ.'})
     with TestClient(main.app) as test_client:
         yield test_client
@@ -82,11 +79,14 @@ def test_upload_and_ledger(client):
     assert not list(main.RUNS_DIR.glob('*/**/*upload'))
 
 
-def test_roi_required_and_model_suggestion(client, monkeypatch):
+def test_optional_roi_and_model_suggestion(client, monkeypatch):
     response = upload(client, roi=None)
-    assert response.status_code == 422
-    assert response.json()['detail'] == 'Mark the pothole on the before photo'
-    assert list(main.RUNS_DIR.iterdir()) == []
+    assert response.status_code == 200
+    assert response.json()['verdict'] == 'NOT_FIXED'
+    assert response.json()['percent_resolved'] == 0
+    assert response.json()['roi_source'] == 'none'
+    assert response.json()['roi'] is None
+    assert response.json()['reasons'] == ['No change detected between the photos; the reported problem appears untouched']
     monkeypatch.setattr(run.segment, 'get_detector', lambda: SimpleNamespace(suggest_roi=lambda image:(ROI,.8)))
     response = upload(client, roi=None)
     assert response.status_code == 200
@@ -287,6 +287,12 @@ def test_report_generation_failure_removes_temporary_file(client, monkeypatch):
 
 def test_real_demo_cases_use_only_after_hashes(tmp_path, monkeypatch):
     from backend.pipeline import dedupe, exif
+    # Isolate historical photo fixtures from changes to the public catalogue.
+    catalogue = tmp_path/'demo-fixtures'
+    shutil.copytree(main.DEMO_DIR,catalogue)
+    if not (catalogue/'case_07').exists():
+        shutil.copytree(main.DEMO_DIR.parent/'extra/case_07',catalogue/'case_07')
+    monkeypatch.setattr(main,'DEMO_DIR',catalogue)
     monkeypatch.setenv('FIXCHECK_MOCK_SEG', '1')
     monkeypatch.setattr(store, 'DB_PATH', tmp_path/'real-demo.db')
     monkeypatch.setattr(main, 'RUNS_DIR', tmp_path/'runs')
@@ -294,7 +300,7 @@ def test_real_demo_cases_use_only_after_hashes(tmp_path, monkeypatch):
     with TestClient(main.app) as real_client:
         cases = real_client.get('/api/demo').json()
         assert [case['case_id'] for case in cases] == [f'case_{index:02d}' for index in range(1,8)]
-        assert [case['title'] for case in cases[-2:]] == ['Real photo: object removed', 'Real photo: different spot']
+        assert [case['title'] for case in cases[-2:]] == [json.loads((catalogue/case_id/'meta.json').read_text())['title'] for case_id in ('case_06','case_07')]
         assert not any(case['simulated'] for case in cases[-2:])
         # The same before photo is used twice, but only after evidence is indexed.
         before_hash = dedupe.phash_hex(exif.read_bgr(str(main.DEMO_DIR/'case_06/before.jpg')))
@@ -310,3 +316,57 @@ def test_real_demo_cases_use_only_after_hashes(tmp_path, monkeypatch):
             assert result['checks']['duplicate']['status'] == 'pass'
             assert result['location']['lat'] is None and result['location']['lon'] is None
             assert result['roi'] == [[0.39,0.40],[0.56,0.40],[0.56,0.51],[0.39,0.51]]
+
+
+
+def test_startup_replaces_demo_hashes_and_preserves_real_uploads(client):
+    from backend.pipeline import dedupe, exif
+    folder = main.DEMO_DIR/'case_01'
+    folder.mkdir()
+    complaint_id = 'BLR-DEMO-0001'
+    (folder/'meta.json').write_text(json.dumps({'case_id':'case_01','complaint_id':complaint_id}))
+    store.add_hash(complaint_id,'0'*16)
+    store.add_hash('citizen-upload','f'*16)
+    for image in (textured(),np.random.default_rng(17).integers(0,256,(600,800,3),dtype=np.uint8)):
+        assert cv2.imwrite(str(folder/'after.jpg'),image)
+        current = dedupe.phash_hex(exif.read_bgr(str(folder/'after.jpg')))
+        with TestClient(main.app):
+            assert [(cid,value) for cid,value in store.all_hashes() if cid==complaint_id] == [(complaint_id,current)]
+            assert ('citizen-upload','f'*16) in store.all_hashes()
+    # An unreadable replacement must not leave the previous evidence registered.
+    (folder/'after.jpg').write_bytes(b'unreadable')
+    with TestClient(main.app):
+        assert store.all_hashes() == [('citizen-upload','f'*16)]
+
+
+
+def test_no_roi_simulated_fix_automatically_locates_change(client):
+    before = textured()
+    after = before.copy()
+    cv2.rectangle(before,(300,250),(440,350),(20,20,20),-1)
+    cv2.rectangle(after,(300,250),(440,350),(150,150,150),-1)
+    files = {}
+    for name,image in [('before',before),('after',after)]:
+        ok,encoded = cv2.imencode('.png',image)
+        assert ok
+        files[name] = (name+'.png',encoded.tobytes(),'image/png')
+    response = client.post('/api/verify',data={'complaint_id':'auto-repair'},files=files)
+    assert response.status_code == 200,response.text
+    result = response.json()
+    assert result['verdict'] != 'SUSPICIOUS'
+    assert result['roi_source'] == 'auto_change'
+    roi = result['roi']
+    assert roi[0][0] < 300/800 < roi[2][0]
+    assert roi[0][1] < 250/600 < roi[2][1]
+    assert result['images']['after_aligned']
+
+
+def test_no_change_preserves_duplicate_failure(client):
+    before = upload(client,roi=None).json()
+    # Use the exact encoded input hash, matching the upload helper.
+    value = next(value for cid,value in store.all_hashes() if cid=='test-1')
+    store.add_hash('earlier-upload',value)
+    result = upload(client,roi=None).json()
+    assert before['verdict']=='NOT_FIXED'
+    assert result['verdict']=='SUSPICIOUS'
+    assert result['checks']['duplicate']['status']=='fail'

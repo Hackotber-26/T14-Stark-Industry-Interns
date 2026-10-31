@@ -7,6 +7,11 @@ import demoCatalog from './mocks/demos.json'
 
 export type Verdict = 'FIXED' | 'PARTIAL' | 'NOT_FIXED' | 'SUSPICIOUS' | 'NEEDS_REVIEW'
 export type ROI = [number, number][]
+/** Invalid or incomplete boxes are omitted so automatic measurement can proceed. */
+export function isValidRoi(roi: ROI | null): roi is ROI {
+  return !!roi && roi.length === 4 && roi.every(point => point.length === 2 && point.every(value => Number.isFinite(value) && value >= 0 && value <= 1)) && roi[2][0] > roi[0][0] && roi[2][1] > roi[0][1]
+}
+
 export interface CheckResult {
   status: 'pass' | 'warn' | 'fail' | 'skipped'; detail: string
   distance_m?: number | null; inliers?: number | null; inlier_ratio?: number | null
@@ -23,7 +28,7 @@ export interface VerifyResult {
   checks: Record<'location' | 'duplicate' | 'scene' | 'quality', CheckResult>
   explanation: { en: string; kn: string }
   images: { before: string; after: string; after_aligned: string | null; heatmap: string | null }
-  roi: ROI | null; roi_source: 'marked' | 'model' | null
+  roi: ROI | null; roi_source: 'marked' | 'model' | 'auto_change' | null
   location: { lat: number; lon: number; ward: string } | null
   timings_ms: Record<string, number>; created_at: string
 }

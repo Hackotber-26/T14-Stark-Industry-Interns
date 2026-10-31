@@ -43,3 +43,12 @@ QUALITY_POOR = 0.35
 
 # Optional advisory second opinion; FIXCHECK_NO_AI=1 disables it.
 AI_SECOND_OPINION = True
+
+# Optional box: locate a substantial changed area after scene alignment.
+AUTO_CHANGE_PERCENTILE = 95.0
+AUTO_CHANGE_THRESHOLD_SCALE = 1.5
+AUTO_CHANGE_MIN_FRAC = 0.005
+AUTO_CHANGE_PAD = 0.15
+AUTO_CHANGE_BLUR = 5
+AUTO_CHANGE_OPEN = 5
+AUTO_CHANGE_CLOSE = 9

@@ -45,6 +45,12 @@ def add_hash(complaint_id: str, after_hash: str) -> None:
         db.execute('INSERT OR IGNORE INTO hashes VALUES (?,?)', (complaint_id, after_hash))
 
 
+def delete_hashes(complaint_id: str) -> None:
+    """Remove outdated evidence hashes for one complaint."""
+    with _connect() as db:
+        db.execute('DELETE FROM hashes WHERE complaint_id=?', (complaint_id,))
+
+
 def all_hashes() -> list[tuple[str, str]]:
     """Read the known evidence hashes."""
     with _connect() as db:

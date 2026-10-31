@@ -50,7 +50,10 @@ def _warm_up_ai() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    for folder, meta in _cases():
+    cases = _cases()
+    for _, meta in cases:
+        store.delete_hashes(meta['complaint_id'])
+    for folder, meta in cases:
         try:
             image = exif.read_bgr(str(folder / 'after.jpg'))
         except exif.UnreadableImage:
@@ -121,9 +124,6 @@ def _perform(before, after, complaint_id, before_ll, after_ll, roi, folder, meta
         image = exif.read_bgr(str(after))
         store.add_hash(complaint_id, dedupe.phash_hex(image))
         return result
-    except run.RoiRequired as error:
-        shutil.rmtree(folder, ignore_errors=True)
-        raise HTTPException(422, str(error)) from error
     except exif.UnreadableImage as error:
         shutil.rmtree(folder, ignore_errors=True)
         raise HTTPException(400, str(error)) from error
