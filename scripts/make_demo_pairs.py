@@ -113,7 +113,8 @@ def make_after(before: np.ndarray, roi: list, kind: str, seed: int, mode: str = 
         return jitter(before,rng), 'none'
     mask, source = repair_mask(before,roi,mode)
     if kind == 'partial':
-        x_mid = int(round(np.mean(np.array(roi)[:,0])*before.shape[1]))
+        x, _, width, _ = cv2.boundingRect(mask)
+        x_mid = x + width // 2
         mask[:,x_mid:] = 0
     elif kind != 'fixed':
         raise ValueError(f'Unknown repair kind: {kind}')

@@ -25,7 +25,8 @@ for folder in (DEMO_DIR, RUNS_DIR):
 def _cases():
     """Read available case metadata; no demo data is also valid."""
     cases = []
-    for path in sorted(DEMO_DIR.glob('case_*/meta.json')):
+    paths = [path for path in DEMO_DIR.glob('case_*/meta.json') if path.parent.name[5:].isdigit()]
+    for path in sorted(paths, key=lambda path: int(path.parent.name[5:])):
         meta = json.loads(path.read_text())
         if meta.get('case_id') != path.parent.name:
             continue
@@ -81,9 +82,20 @@ def _gps(lat, lon):
     return LatLon(lat, lon)
 
 
+def _known_hashes(meta=None):
+    """Demo evidence sees earlier numbered cases and existing real uploads."""
+    hashes = store.all_hashes()
+    if meta is None:
+        return hashes
+    case_numbers = {case['complaint_id']: int(case['case_id'][5:]) for _, case in _cases()}
+    current = int(meta['case_id'][5:])
+    return [(complaint_id, value) for complaint_id, value in hashes
+            if complaint_id not in case_numbers or case_numbers[complaint_id] < current]
+
+
 def _perform(before, after, complaint_id, before_ll, after_ll, roi, folder, meta=None):
     try:
-        result = run.verify(str(before), str(after), complaint_id, before_ll, after_ll, roi, store.all_hashes(), str(folder))
+        result = run.verify(str(before), str(after), complaint_id, before_ll, after_ll, roi, _known_hashes(meta), str(folder))
         if meta:
             result.update(case_id=meta['case_id'], simulated=meta.get('simulated', False))
             result['location']['ward'] = meta.get('ward')

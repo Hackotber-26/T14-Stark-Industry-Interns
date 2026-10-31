@@ -22,15 +22,18 @@ SEG_IMGSZ = 640
 ROI_PAD = 0.10             # pad the suggested box by 10% each side
 
 # Defect measurement inside the marked box
-RING_PX = 40               # width of the "surrounding road" ring around the box
+RING_PX = 60               # width of the "surrounding road" ring around the box
 TEXTURE_WIN = 7            # window for local texture (std of L channel)
 ANOMALY_Z = 2.5            # pixel is "not road" if its robust z-score vs the ring is above this
 TEXTURE_WEIGHT = 0.5       # texture counts half as much as colour
 MIN_DEFECT_FRAC_OF_ROI = 0.05   # before-defect area / box area below this -> NEEDS_REVIEW
-REMAINING_DILATE_PX = 7    # count after-defect pixels only inside the dilated before-defect
+REMAINING_DILATE_PX = 7    # heatmap: grow remaining damage slightly before marking the rest repaired
+GRABCUT_ITERS = 5          # iterations for segmenting the damage inside the marked box
+MIN_DEFECT_CONTRAST = 8.0  # Lab distance between damage and surrounding road; below -> no clear damage
+CHANGE_THRESHOLD = 8.0     # Lab change below this (after lighting match) = surface unchanged
 
 # Verdict
 FIXED_MIN_PCT = 85.0
-PARTIAL_MIN_PCT = 40.0
+PARTIAL_MIN_PCT = 25.0
 QUALITY_GOOD = 0.60
 QUALITY_POOR = 0.35

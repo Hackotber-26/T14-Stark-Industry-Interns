@@ -146,3 +146,42 @@ def test_store_order_and_hash_idempotency(client):
     store.add_hash('c','abc')
     store.add_hash('c','abc')
     assert store.all_hashes() == [('c','abc')]
+
+
+@pytest.mark.parametrize('order', [('case_05', 'case_01'), ('case_01', 'case_05')])
+def test_demo_duplicate_uses_earlier_cases_and_real_uploads(client, order):
+    image = textured()
+    for case_id in ('case_05', 'case_01'):
+        folder = main.DEMO_DIR/case_id
+        folder.mkdir()
+        for name in ('before', 'after'):
+            cv2.imwrite(str(folder/f'{name}.jpg'), image)
+        # Deliberately misleading labels must not control duplicate checks.
+        meta = {'case_id':case_id, 'complaint_id':case_id, 'title':'Test',
+                'expected':'NOT_FIXED', 'simulated':True, 'ward':'Ward A', 'roi':ROI}
+        (folder/'meta.json').write_text(json.dumps(meta))
+    with TestClient(main.app) as booted:
+        assert [cid for cid, _ in store.all_hashes()] == ['case_01', 'case_05']
+        for case_id in order:
+            result = booted.post(f'/api/demo/{case_id}/verify').json()
+            assert result['checks']['duplicate']['status'] == ('pass' if case_id=='case_01' else 'fail')
+        assert upload(booted).status_code == 200
+        result = booted.post('/api/demo/case_01/verify').json()
+        assert result['checks']['duplicate']['status'] == 'fail'
+        assert result['checks']['duplicate']['matched_complaint_id'] == 'test-1'
+
+
+def test_partial_split_follows_damage_bounds(monkeypatch):
+    from scripts import make_demo_pairs as pairs
+    image = np.zeros((100, 100, 3), np.uint8)
+    damage = np.zeros((100, 100), np.uint8)
+    damage[20:60, 10:30] = 255
+    captured = []
+    monkeypatch.setattr(pairs, 'repair_mask', lambda *args: (damage.copy(), 'defect_mask'))
+    def fill(before, mask, roi, rng):
+        captured.append(mask.copy())
+        return before
+    monkeypatch.setattr(pairs, 'fill_repair', fill)
+    pairs.make_after(image, ROI, 'partial', 0)
+    assert np.count_nonzero(captured[0][:, :20]) == 400
+    assert not np.any(captured[0][:, 20:])

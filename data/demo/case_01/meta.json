@@ -32,7 +32,7 @@
       0.71
     ]
   ],
-  "repair_mask_source": "ellipse_fallback",
+  "repair_mask_source": "defect_mask",
   "seed": 1,
   "source_photo": "pothole_9.jpg"
 }
