@@ -110,3 +110,80 @@ test('keyboard shortcuts accept 1–5, H and K but ignore editing, repeated keys
   for (const key of ['1', '2', '3', '4', '5', 'H', 'K']) assert.equal(shortcutKey({ ...event, key }), key.toLowerCase())
   for (const extra of [{ key: '6' }, { repeat: true }, { isComposing: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }, { target: { isContentEditable: true } }, { target: { closest: () => ({ tagName: 'INPUT' }) } }]) assert.equal(shortcutKey({ ...event, ...extra }), null)
 })
+
+test('ledger reads the live results endpoint without substituting demo fixtures', async () => {
+  const client = load('api', async (url, init) => {
+    assert.equal(url, 'http://localhost:8000/api/results')
+    assert.equal(init.method, undefined)
+    return json([{ ...fixture, id: 'r_record', simulated: false }])
+  })
+  const results = await client.api.results()
+  assert.equal(results.length, 1)
+  assert.equal(results[0].id, 'r_record')
+})
+
+test('ward rates use the latest result per complaint and count pending reviews separately', () => {
+  const { summarizeWards } = load('ledgerMetrics')
+  const record = (complaint_id, verdict, created_at, ward = 'Ward A') => ({ ...fixture, complaint_id, verdict, created_at, location: { ...fixture.location, ward } })
+  const rows = [
+    record('one', 'NOT_FIXED', '2026-11-01T08:00:00Z'),
+    record('one', 'FIXED', '2026-11-01T10:00:00Z'),
+    record('two', 'PARTIAL', '2026-11-01T09:00:00Z'),
+    record('three', 'SUSPICIOUS', '2026-11-01T09:00:00Z'),
+    record('four', 'NEEDS_REVIEW', '2026-11-01T09:00:00Z'),
+    record('five', 'NOT_FIXED', '2026-11-01T09:00:00Z', 'Ward B'),
+  ]
+  const summaries = summarizeWards(rows)
+  const a = summaries.find(summary => summary.ward === 'Ward A')
+  assert.equal(a.total, 4)
+  assert.equal(a.failed, 2)
+  assert.equal(a.pending, 1)
+  assert.equal(a.failurePercent, 50)
+  assert.equal(summaries[0].ward, 'Ward B')
+  assert.equal(summaries[0].failurePercent, 100)
+})
+
+test('ward summaries handle missing locations and empty results without inventing coordinates', () => {
+  const { summarizeWards, hasCoordinates } = load('ledgerMetrics')
+  assert.equal(summarizeWards([]).length, 0)
+  const missing = { ...fixture, location: null }
+  assert.equal(summarizeWards([missing])[0].ward, 'Unassigned ward')
+  assert.equal(hasCoordinates(missing), false)
+  assert.equal(hasCoordinates({ ...fixture, location: { lat: 0, lon: 0 } }), true)
+  for (const location of [{ lat: 91, lon: 10 }, { lat: 20, lon: -181 }, { lat: NaN, lon: 10 }, { lat: null, lon: 10 }]) assert.equal(hasCoordinates({ ...fixture, location }), false)
+})
+
+test('friendly errors never display raw service messages or private details', () => {
+  const { friendlyError } = load('presentation')
+  for (const context of ['demos', 'verify', 'ledger', 'reconnect']) {
+    for (const error of [new Error('private traceback /private/internal/file'), { status: 500, message: 'database exception: secret' }, null]) {
+      const copy = friendlyError(error, context)
+      assert.ok(copy.length > 20)
+      assert.doesNotMatch(copy, /traceback|private|secret|database|exception/)
+    }
+  }
+  assert.match(friendlyError({ status: 0 }, 'verify'), /connection/)
+  assert.match(friendlyError({ status: 422 }, 'verify'), /photos, complaint ID/)
+})
+
+test('the offline catalog matches the real demo stories, including reused evidence', async () => {
+  const client = load('api')
+  const demos = await client.api.demos()
+  assert.deepEqual(demos.map(demo => demo.title), ['Pothole marked resolved – honest repair', 'Only half the pothole repaired', 'Pothole still unrepaired', 'Photo from a different road', 'Reused photo'])
+  assert.deepEqual(demos.map(demo => demo.expected), ['FIXED', 'PARTIAL', 'NOT_FIXED', 'SUSPICIOUS', 'SUSPICIOUS'])
+  const reused = await client.api.demoVerify('case_05')
+  assert.equal(reused.verdict, 'SUSPICIOUS')
+  assert.equal(reused.checks.duplicate.status, 'fail')
+  assert.equal(reused.checks.duplicate.matched_complaint_id, 'DEMO-0001')
+})
+
+test('live demo cards preserve server titles and thumbnails with the requested reused-photo label', async () => {
+  const catalog = [{ case_id: 'case_01', title: 'Real repair title', before_url: '/demo-files/case_01/before.jpg', expected: 'FIXED' }, { case_id: 'case_05', title: 'Repair photo reused for another complaint', before_url: '/demo-files/case_05/before.jpg', expected: 'SUSPICIOUS' }]
+  const client = load('api', async () => json(catalog))
+  const demos = await client.api.demos()
+  assert.equal(demos[0].title, catalog[0].title)
+  assert.equal(demos[0].before_url, catalog[0].before_url)
+  assert.equal(demos[1].title, 'Reused photo')
+  assert.equal(demos[1].expected, 'SUSPICIOUS')
+  assert.equal(demos[1].before_url, catalog[1].before_url)
+})

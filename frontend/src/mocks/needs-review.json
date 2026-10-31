@@ -1,7 +1,7 @@
 {
-  "id": "mock_5",
-  "complaint_id": "DEMO-0005",
-  "case_id": "case_05",
+  "id": "mock_review",
+  "complaint_id": "DEMO-REVIEW",
+  "case_id": null,
   "simulated": true,
   "verdict": "NEEDS_REVIEW",
   "confidence": 0.81,
