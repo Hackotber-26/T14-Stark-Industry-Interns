@@ -1,0 +1,38 @@
+{
+  "case_id": "case_01",
+  "title": "Pothole marked resolved – honest repair",
+  "complaint_id": "BLR-DEMO-0001",
+  "issue_type": "pothole",
+  "ward": "Ward A",
+  "expected": "FIXED",
+  "simulated": true,
+  "before_gps": {
+    "lat": 12.9352,
+    "lon": 77.6245
+  },
+  "after_gps": {
+    "lat": 12.93521,
+    "lon": 77.62452
+  },
+  "roi": [
+    [
+      0.35,
+      0.53
+    ],
+    [
+      0.57,
+      0.53
+    ],
+    [
+      0.57,
+      0.71
+    ],
+    [
+      0.35,
+      0.71
+    ]
+  ],
+  "repair_mask_source": "ellipse_fallback",
+  "seed": 1,
+  "source_photo": "pothole_9.jpg"
+}

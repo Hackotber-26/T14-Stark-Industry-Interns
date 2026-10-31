@@ -1,0 +1,38 @@
+{
+  "case_id": "case_05",
+  "title": "Repair photo reused for another complaint",
+  "complaint_id": "BLR-DEMO-0005",
+  "issue_type": "pothole",
+  "ward": "Ward A",
+  "expected": "SUSPICIOUS",
+  "simulated": true,
+  "before_gps": {
+    "lat": 12.9352,
+    "lon": 77.6245
+  },
+  "after_gps": {
+    "lat": 12.93521,
+    "lon": 77.62452
+  },
+  "roi": [
+    [
+      0.61,
+      0.68
+    ],
+    [
+      0.77,
+      0.68
+    ],
+    [
+      0.77,
+      0.83
+    ],
+    [
+      0.61,
+      0.83
+    ]
+  ],
+  "repair_mask_source": "none",
+  "seed": 5,
+  "source_photo": "pothole_2.jpg"
+}

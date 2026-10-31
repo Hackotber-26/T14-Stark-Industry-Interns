@@ -1,0 +1,38 @@
+{
+  "case_id": "case_03",
+  "title": "Pothole still unrepaired",
+  "complaint_id": "BLR-DEMO-0003",
+  "issue_type": "pothole",
+  "ward": "Ward A",
+  "expected": "NOT_FIXED",
+  "simulated": true,
+  "before_gps": {
+    "lat": 12.9352,
+    "lon": 77.6245
+  },
+  "after_gps": {
+    "lat": 12.93521,
+    "lon": 77.62452
+  },
+  "roi": [
+    [
+      0.34,
+      0.74
+    ],
+    [
+      0.49,
+      0.74
+    ],
+    [
+      0.49,
+      0.92
+    ],
+    [
+      0.34,
+      0.92
+    ]
+  ],
+  "repair_mask_source": "none",
+  "seed": 3,
+  "source_photo": "pothole_5.jpg"
+}

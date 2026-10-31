@@ -1,0 +1,38 @@
+{
+  "case_id": "case_04",
+  "title": "Photo from a different road",
+  "complaint_id": "BLR-DEMO-0004",
+  "issue_type": "pothole",
+  "ward": "Ward A",
+  "expected": "SUSPICIOUS",
+  "simulated": true,
+  "before_gps": {
+    "lat": 12.9352,
+    "lon": 77.6245
+  },
+  "after_gps": {
+    "lat": 12.93646,
+    "lon": 77.6245
+  },
+  "roi": [
+    [
+      0.47,
+      0.59
+    ],
+    [
+      0.62,
+      0.59
+    ],
+    [
+      0.62,
+      0.81
+    ],
+    [
+      0.47,
+      0.81
+    ]
+  ],
+  "repair_mask_source": "none",
+  "seed": 4,
+  "source_photo": "pothole_7.jpg"
+}

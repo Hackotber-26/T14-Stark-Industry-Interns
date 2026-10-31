@@ -1,0 +1,38 @@
+{
+  "case_id": "case_02",
+  "title": "Only half the pothole repaired",
+  "complaint_id": "BLR-DEMO-0002",
+  "issue_type": "pothole",
+  "ward": "Ward A",
+  "expected": "PARTIAL",
+  "simulated": true,
+  "before_gps": {
+    "lat": 12.9352,
+    "lon": 77.6245
+  },
+  "after_gps": {
+    "lat": 12.93521,
+    "lon": 77.62452
+  },
+  "roi": [
+    [
+      0.19,
+      0.69
+    ],
+    [
+      0.44,
+      0.69
+    ],
+    [
+      0.44,
+      0.95
+    ],
+    [
+      0.19,
+      0.95
+    ]
+  ],
+  "repair_mask_source": "ellipse_fallback",
+  "seed": 2,
+  "source_photo": "pothole_4.jpg"
+}
