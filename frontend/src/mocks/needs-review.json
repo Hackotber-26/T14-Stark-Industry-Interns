@@ -1,0 +1,73 @@
+{
+  "id": "mock_5",
+  "complaint_id": "DEMO-0005",
+  "case_id": "case_05",
+  "simulated": true,
+  "verdict": "NEEDS_REVIEW",
+  "confidence": 0.81,
+  "percent_resolved": null,
+  "reasons": [
+    "Could not verify automatically. An official needs to check this.",
+    "Illustrative mock fixture; no image analysis was performed."
+  ],
+  "checks": {
+    "location": {
+      "status": "pass",
+      "detail": "Photos taken 4 m apart",
+      "distance_m": 4.1
+    },
+    "duplicate": {
+      "status": "pass",
+      "detail": "No earlier use of this photo found",
+      "hamming": 31
+    },
+    "scene": {
+      "status": "pass",
+      "detail": "286 matching points (44%) – same scene",
+      "inliers": 286,
+      "inlier_ratio": 0.44
+    },
+    "quality": {
+      "status": "skipped",
+      "detail": "Not scored – manual review required"
+    }
+  },
+  "explanation": {
+    "en": "Could not verify automatically. An official needs to check this.",
+    "kn": "ಸ್ವಯಂ ಪರಿಶೀಲನೆ ಸಾಧ್ಯವಾಗಿಲ್ಲ. ಅಧಿಕಾರಿಯಿಂದ ಪರಿಶೀಲನೆ ಅಗತ್ಯ."
+  },
+  "images": {
+    "before": "/mock/before.svg",
+    "after": "/mock/after.svg",
+    "after_aligned": null,
+    "heatmap": null
+  },
+  "roi": [
+    [
+      0.3,
+      0.48
+    ],
+    [
+      0.7,
+      0.48
+    ],
+    [
+      0.7,
+      0.8
+    ],
+    [
+      0.3,
+      0.8
+    ]
+  ],
+  "roi_source": "marked",
+  "location": {
+    "lat": 12.9352,
+    "lon": 77.6245,
+    "ward": "Demo ward"
+  },
+  "timings_ms": {
+    "total": 2140
+  },
+  "created_at": "2026-11-01T10:42:11Z"
+}
