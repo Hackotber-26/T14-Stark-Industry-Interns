@@ -5,6 +5,7 @@ from collections import Counter
 import json
 from pathlib import Path
 import sys
+import traceback
 from time import perf_counter
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,7 +86,8 @@ def evaluate(raw: Path, out: Path, report: Path, mode: str = 'auto') -> int:
                     row.update(verdict=result['verdict'],percent_resolved=result['percent_resolved'])
                     (folder/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
                 except NotImplementedError as error:
-                    row['error'] = f'BLOCKED: pending pipeline implementation ({type(error).__name__})'
+                    frame = traceback.extract_tb(error.__traceback__)[-1]
+                    row['error'] = f'BLOCKED: {Path(frame.filename).name}:{frame.name} is not implemented'
                     unavailable = True
                 except (ValueError, OSError) as error:
                     row['error'] = f'{type(error).__name__}: {error}'

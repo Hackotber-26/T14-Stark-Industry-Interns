@@ -16,13 +16,13 @@ def road_case() -> tuple:
     road_gray = np.clip(rng.normal(150, 4, shape), 0, 255).astype(np.uint8)
     road = np.repeat(road_gray[..., None], 3, axis=2)
     ellipse = np.zeros(shape, dtype=np.uint8)
-    cv2.ellipse(ellipse, (320, 240), (75, 50), 0, 0, 360, 255, -1)
+    cv2.ellipse(ellipse, (320, 240), (110, 80), 0, 0, 360, 255, -1)
     hole_gray = np.clip(rng.normal(45, 7, shape), 0, 255).astype(np.uint8)
     hole = np.repeat(hole_gray[..., None], 3, axis=2)
     before = road.copy()
     before[ellipse > 0] = hole[ellipse > 0]
-    roi = [[220 / 640, 165 / 480], [420 / 640, 165 / 480],
-           [420 / 640, 315 / 480], [220 / 640, 315 / 480]]
+    roi = [[180 / 640, 130 / 480], [460 / 640, 130 / 480],
+           [460 / 640, 350 / 480], [180 / 640, 350 / 480]]
     valid = np.full(shape, 255, dtype=np.uint8)
     return road, before, ellipse, roi, valid
 
