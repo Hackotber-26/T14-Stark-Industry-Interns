@@ -1,4 +1,4 @@
-"""FixCheck upload, demo, and result API."""
+"""Sabooth upload, demo, and result API."""
 from contextlib import asynccontextmanager
 import json
 import logging
