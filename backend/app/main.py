@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title='FixCheck', lifespan=lifespan)
+app = FastAPI(title='Sabooth', lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=['http://localhost:5173'], allow_methods=['*'], allow_headers=['*'])
 app.mount('/files', StaticFiles(directory=RUNS_DIR), name='files')
 app.mount('/demo-files', StaticFiles(directory=DEMO_DIR), name='demo-files')

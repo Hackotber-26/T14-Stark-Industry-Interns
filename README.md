@@ -1,8 +1,8 @@
-# FixCheck
+# Sabooth (ಸಾಬೀತು, Kannada for 'proof')
 
 **Stop paying for fake repairs.**
 
-FixCheck compares before and after pothole photos to verify whether a reported repair actually happened. It runs locally, checks evidence before measuring damage, and returns a verdict with a repaired percentage, reasons, and English/Kannada explanations.
+Sabooth compares before and after pothole photos to verify whether a reported repair actually happened. It runs locally, checks evidence before measuring damage, and returns a verdict with a repaired percentage, reasons, and English/Kannada explanations.
 
 ## What it does
 

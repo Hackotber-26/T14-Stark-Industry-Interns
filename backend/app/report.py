@@ -44,7 +44,7 @@ def build_report(result: dict, out_pdf: str):
 
     pct = result.get('percent_resolved')
     percent = f'{pct:g}% repaired' if pct is not None else 'Repair percentage unavailable'
-    story = [paragraph('FixCheck — Repair verification report', 'Title'),
+    story = [paragraph('Sabooth — Repair verification report', 'Title'),
              paragraph(f"Complaint: {result.get('complaint_id', 'Unavailable')}"),
              paragraph(f"Result: {result.get('id', 'Unavailable')} | Created: {result.get('created_at', 'Unavailable')}"),
              Spacer(1, 10),
@@ -93,7 +93,7 @@ def build_report(result: dict, out_pdf: str):
     output.parent.mkdir(parents=True, exist_ok=True)
     document = SimpleDocTemplate(str(output), pagesize=A4, leftMargin=36, rightMargin=36,
                                  topMargin=32, bottomMargin=32,
-                                 title='FixCheck repair verification report')
+                                 title='Sabooth repair verification report')
     def page_background(canvas, doc) -> None:
         """Give raster previews and printouts an opaque white page."""
         canvas.saveState()
