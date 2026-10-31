@@ -2,7 +2,8 @@ import fixed from './mocks/fixed.json'
 import partial from './mocks/partial.json'
 import notFixed from './mocks/not-fixed.json'
 import suspicious from './mocks/suspicious.json'
-import review from './mocks/needs-review.json'
+import reused from './mocks/reused.json'
+import demoCatalog from './mocks/demos.json'
 
 export type Verdict = 'FIXED' | 'PARTIAL' | 'NOT_FIXED' | 'SUSPICIOUS' | 'NEEDS_REVIEW'
 export type ROI = [number, number][]
@@ -27,7 +28,7 @@ export interface DemoCase {
 }
 export const mockMode = import.meta.env.VITE_MOCK === '1'
 export const apiBase = (import.meta.env.VITE_API_URL ?? 'http://localhost:8000').replace(/\/$/, '')
-const fixtures = [fixed, partial, notFixed, suspicious, review] as unknown as VerifyResult[]
+const fixtures = [fixed, partial, notFixed, suspicious, reused] as unknown as VerifyResult[]
 const cachedResults = new Map(fixtures.map(result => [result.case_id!, result]))
 let offline = false
 export const isOffline = () => offline
@@ -64,14 +65,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 function mockDemos(): DemoCase[] {
-  return fixtures.map((r, i) => ({ case_id: r.case_id!, title: ['Complete repair', 'Partial repair', 'Unrepaired pothole', 'Wrong location', 'Manual review'][i], expected: r.verdict, simulated: true, ward: 'Demo ward', before_url: r.images.before, after_url: r.images.after }))
+  return structuredClone(demoCatalog) as DemoCase[]
 }
+
 
 export const api = {
   health: () => request<{ ok: boolean; model_loaded: boolean; mock_seg: boolean }>('/api/health'),
   demos: async (): Promise<DemoCase[]> => {
     if (mockMode) return mockDemos()
-    try { return await request('/api/demo') } catch (error) {
+    try {
+      const demos = await request<DemoCase[]>('/api/demo')
+      return demos.map(demo => demo.case_id === 'case_05' ? { ...demo, title: 'Reused photo', expected: 'SUSPICIOUS' } : demo)
+    } catch (error) {
       if (error instanceof ApiError && error.status === 0) return mockDemos()
       throw error
     }

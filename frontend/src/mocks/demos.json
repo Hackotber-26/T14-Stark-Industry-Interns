@@ -1,0 +1,47 @@
+[
+  {
+    "case_id": "case_01",
+    "title": "Pothole marked resolved – honest repair",
+    "expected": "FIXED",
+    "simulated": true,
+    "ward": "Ward A",
+    "before_url": "/mock/before.svg",
+    "after_url": "/mock/after.svg"
+  },
+  {
+    "case_id": "case_02",
+    "title": "Only half the pothole repaired",
+    "expected": "PARTIAL",
+    "simulated": true,
+    "ward": "Ward A",
+    "before_url": "/mock/before.svg",
+    "after_url": "/mock/after.svg"
+  },
+  {
+    "case_id": "case_03",
+    "title": "Pothole still unrepaired",
+    "expected": "NOT_FIXED",
+    "simulated": true,
+    "ward": "Ward A",
+    "before_url": "/mock/before.svg",
+    "after_url": "/mock/after.svg"
+  },
+  {
+    "case_id": "case_04",
+    "title": "Photo from a different road",
+    "expected": "SUSPICIOUS",
+    "simulated": true,
+    "ward": "Ward A",
+    "before_url": "/mock/before.svg",
+    "after_url": "/mock/after.svg"
+  },
+  {
+    "case_id": "case_05",
+    "title": "Reused photo",
+    "expected": "SUSPICIOUS",
+    "simulated": true,
+    "ward": "Ward A",
+    "before_url": "/mock/before.svg",
+    "after_url": "/mock/after.svg"
+  }
+]
