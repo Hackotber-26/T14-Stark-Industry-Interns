@@ -1,33 +1,160 @@
-"""FixCheck HTTP contract scaffold."""
+"""FixCheck upload, demo, and result API."""
+from contextlib import asynccontextmanager
+import json
+import math
 import os
+from pathlib import Path
+import shutil
+from uuid import uuid4
+import cv2
+import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
-app = FastAPI(title="FixCheck")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"])
-for folder, route in [("data/runs", "/files"), ("data/demo", "/demo-files")]:
-    Path(folder).mkdir(parents=True, exist_ok=True)
-    app.mount(route, StaticFiles(directory=folder), name=route[1:])
-SAMPLE = {'id': 'r_8f3a2c', 'complaint_id': 'BLR-DEMO-0002', 'case_id': 'case_02', 'simulated': True, 'verdict': 'PARTIAL', 'confidence': 0.81, 'percent_resolved': 54.3, 'reasons': ['Only 54% of the original pothole area is repaired', 'Same location confirmed (4 m apart, 286 matching points)'], 'checks': {'location': {'status': 'pass', 'detail': 'Photos taken 4 m apart', 'distance_m': 4.1}, 'duplicate': {'status': 'pass', 'detail': 'No earlier use of this photo found', 'hamming': 31}, 'scene': {'status': 'pass', 'detail': '286 matching points (44%) – same scene', 'inliers': 286, 'inlier_ratio': 0.44}, 'quality': {'status': 'warn', 'detail': 'Patch surface looks uneven', 'score': 0.52}}, 'explanation': {'en': 'Partial repair. Only 54% of the original pothole has been fixed. Re-inspection needed.', 'kn': 'ಭಾಗಶಃ ದುರಸ್ತಿ. ಮೂಲ ಗುಂಡಿಯ 54% ಭಾಗ ಮಾತ್ರ ಸರಿಪಡಿಸಲಾಗಿದೆ. ಮರುಪರಿಶೀಲನೆ ಅಗತ್ಯ.'}, 'images': {'before': '/files/r_8f3a2c/before.jpg', 'after': '/files/r_8f3a2c/after.jpg', 'after_aligned': '/files/r_8f3a2c/after_aligned.jpg', 'heatmap': '/files/r_8f3a2c/heatmap.jpg'}, 'roi': [[0.35, 0.53], [0.57, 0.53], [0.57, 0.71], [0.35, 0.71]], 'roi_source': 'marked', 'location': {'lat': 12.9352, 'lon': 77.6245, 'ward': 'Ward A'}, 'timings_ms': {'total': 2140}, 'created_at': '2026-11-01T10:42:11Z'}
-@app.get("/api/health")
+from . import store
+from ..pipeline import run, segment, dedupe, align
+from ..pipeline.types import LatLon
+
+ROOT = Path(__file__).resolve().parents[2]
+DEMO_DIR = ROOT / 'data/demo'
+RUNS_DIR = ROOT / 'data/runs'
+for folder in (DEMO_DIR, RUNS_DIR):
+    folder.mkdir(parents=True, exist_ok=True)
+
+
+def _cases():
+    """Read available case metadata; no demo data is also valid."""
+    cases = []
+    for path in sorted(DEMO_DIR.glob('case_*/meta.json')):
+        meta = json.loads(path.read_text())
+        if meta.get('case_id') != path.parent.name:
+            continue
+        cases.append((path.parent, meta))
+    return cases
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    for folder, meta in _cases():
+        image = cv2.imread(str(folder / 'after.jpg'))
+        if image is not None:
+            store.add_hash(meta['complaint_id'], dedupe.phash_hex(align.resize_max_side(image)))
+    yield
+
+
+app = FastAPI(title='FixCheck', lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=['http://localhost:5173'], allow_methods=['*'], allow_headers=['*'])
+app.mount('/files', StaticFiles(directory=RUNS_DIR), name='files')
+app.mount('/demo-files', StaticFiles(directory=DEMO_DIR), name='demo-files')
+
+
+@app.get('/api/health')
 def health():
-    return {"ok": True, "model_loaded": False, "mock_seg": os.getenv("FIXCHECK_MOCK_SEG") == "1"}
-@app.get("/api/demo")
+    detector = getattr(segment, '_detector', None)
+    loaded = detector is not None and (getattr(detector, 'model', None) is not None or getattr(detector, '_model', None) is not None)
+    return {'ok': True, 'model_loaded': loaded, 'mock_seg': os.getenv('FIXCHECK_MOCK_SEG') == '1'}
+
+
+@app.get('/api/demo')
 def demos():
-    return []
-@app.post("/api/demo/{case_id}/verify")
+    return [{**{key: meta[key] for key in ('case_id','title','expected','simulated','ward')}, 'before_url': f'/demo-files/{folder.name}/before.jpg', 'after_url': f'/demo-files/{folder.name}/after.jpg'} for folder, meta in _cases()]
+
+
+def _roi(value):
+    if value is None:
+        return None
+    if not isinstance(value, list) or len(value) != 4:
+        raise ValueError('ROI must contain four normalized corners')
+    for point in value:
+        if not isinstance(point, list) or len(point) != 2 or any(isinstance(x, bool) or not isinstance(x, (int,float)) or not math.isfinite(x) or not 0 <= x <= 1 for x in point):
+            raise ValueError('ROI coordinates must be between 0 and 1')
+    if cv2.contourArea(np.array(value, dtype=np.float32)) <= 0:
+        raise ValueError('ROI must have a positive area')
+    return value
+
+
+def _gps(lat, lon):
+    if lat is None and lon is None:
+        return None
+    if lat is None or lon is None or not math.isfinite(lat) or not math.isfinite(lon) or not -90 <= lat <= 90 or not -180 <= lon <= 180:
+        raise ValueError('GPS requires valid latitude and longitude')
+    return LatLon(lat, lon)
+
+
+def _perform(before, after, complaint_id, before_ll, after_ll, roi, folder, meta=None):
+    try:
+        result = run.verify(str(before), str(after), complaint_id, before_ll, after_ll, roi, store.all_hashes(), str(folder))
+        if meta:
+            result.update(case_id=meta['case_id'], simulated=meta.get('simulated', False))
+            result['location']['ward'] = meta.get('ward')
+        store.save_result(result)
+        image = cv2.imread(str(after))
+        store.add_hash(complaint_id, dedupe.phash_hex(align.resize_max_side(image)))
+        return result
+    except run.RoiRequired as error:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise HTTPException(422, str(error)) from error
+    except ValueError as error:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise HTTPException(422, str(error)) from error
+    except Exception:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+
+
+@app.post('/api/demo/{case_id}/verify')
 def demo_verify(case_id: str):
-    return SAMPLE
-@app.post("/api/verify")
+    for folder, meta in _cases():
+        if meta['case_id'] == case_id:
+            before_gps, after_gps = meta.get('before_gps'), meta.get('after_gps')
+            return _perform(folder/'before.jpg', folder/'after.jpg', meta['complaint_id'], _gps(**before_gps) if before_gps else None, _gps(**after_gps) if after_gps else None, _roi(meta.get('roi')), RUNS_DIR/f'r_{uuid4().hex[:12]}', meta)
+    raise HTTPException(404, 'Demo case not found')
+
+
+@app.post('/api/verify')
 def verify(before: UploadFile = File(...), after: UploadFile = File(...), complaint_id: str = Form(...), roi: str | None = Form(None), before_lat: float | None = Form(None), before_lon: float | None = Form(None), after_lat: float | None = Form(None), after_lon: float | None = Form(None)):
-    return SAMPLE
-@app.post("/api/suggest-roi")
+    try:
+        box = _roi(json.loads(roi) if roi is not None else None)
+        before_ll, after_ll = _gps(before_lat, before_lon), _gps(after_lat, after_lon)
+        if not complaint_id.strip():
+            raise ValueError('Complaint ID is required')
+    except (ValueError, TypeError) as error:
+        raise HTTPException(422, str(error)) from error
+    folder = RUNS_DIR/f'r_{uuid4().hex[:12]}'
+    folder.mkdir(parents=True)
+    try:
+        # Preserve original bytes for EXIF; processed images are written separately.
+        before_path, after_path = folder/'before_upload', folder/'after_upload'
+        with before_path.open('wb') as target:
+            shutil.copyfileobj(before.file, target)
+        with after_path.open('wb') as target:
+            shutil.copyfileobj(after.file, target)
+        return _perform(before_path, after_path, complaint_id, before_ll, after_ll, box, folder)
+    finally:
+        for name in ('before_upload', 'after_upload'):
+            (folder/name).unlink(missing_ok=True)
+
+
+@app.post('/api/suggest-roi')
 def suggest(before: UploadFile = File(...)):
-    return {"roi": None, "confidence": 0.0}
-@app.get("/api/results")
+    data = before.file.read()
+    if not data:
+        raise HTTPException(422, 'Upload a valid before image')
+    image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise HTTPException(422, 'Upload a valid before image')
+    roi, confidence = segment.get_detector().suggest_roi(align.resize_max_side(image))
+    return {'roi': roi, 'confidence': float(confidence)}
+
+
+@app.get('/api/results')
 def results():
-    return []
-@app.get("/api/results/{id}")
+    return store.list_results()
+
+
+@app.get('/api/results/{id}')
 def result(id: str):
-    raise HTTPException(404, "Result not found")
+    value = store.get_result(id)
+    if value is None:
+        raise HTTPException(404, 'Result not found')
+    return value
