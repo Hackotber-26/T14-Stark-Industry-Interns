@@ -1,4 +1,4 @@
-"""Build reproducible, explicitly simulated repair pairs (SPEC section 8)."""
+"""Build labelled simulated repair pairs and optional real-photo cases."""
 from __future__ import annotations
 import argparse
 import json
@@ -11,7 +11,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from backend.pipeline import score
+from backend.pipeline import score, exif
 from backend.pipeline.align import resize_max_side
 from backend.pipeline.config import RING_PX, TEXTURE_WIN
 
@@ -128,7 +128,7 @@ def save_image(path: Path, image: np.ndarray) -> None:
 
 
 def preview(out: Path, metas: list[dict]) -> None:
-    """Create a labelled five-row contact sheet with marked before boxes."""
+    """Create a labelled contact sheet with marked before boxes."""
     cell_w, cell_h, label_h = 480, 320, 54
     sheet = np.full((len(metas)*(cell_h+label_h),2*cell_w,3),24,np.uint8)
     for row, meta in enumerate(metas):
@@ -146,12 +146,38 @@ def preview(out: Path, metas: list[dict]) -> None:
             sheet[y0:y0+thumb.shape[0],x0:x0+thumb.shape[1]] = thumb
             text = f"{meta['case_id']} {name.upper()} | {meta['expected']}"
             cv2.putText(sheet,text,(column*cell_w+10,y+22),cv2.FONT_HERSHEY_SIMPLEX,.48,(240,240,240),1,cv2.LINE_AA)
-            cv2.putText(sheet,'SIMULATED REPAIR (DEMO)',(column*cell_w+10,y+43),cv2.FONT_HERSHEY_SIMPLEX,.42,(0,210,255),1,cv2.LINE_AA)
+            label = 'SIMULATED REPAIR (DEMO)' if meta['simulated'] else 'REAL PHOTO'
+            cv2.putText(sheet,label,(column*cell_w+10,y+43),cv2.FONT_HERSHEY_SIMPLEX,.42,(0,210,255),1,cv2.LINE_AA)
     save_image(out/'_preview.jpg',sheet)
 
 
-def generate(raw: Path, out: Path, mode: str = 'auto') -> list[dict]:
-    """Write all five specified cases and a contact sheet."""
+def add_real_cases(real: Path, out: Path) -> list[dict]:
+    """Copy genuine photo pairs into demos with no GPS or synthetic edits."""
+    roi = [[0.39,0.40],[0.56,0.40],[0.56,0.51],[0.39,0.51]]
+    cases = [
+        ('case_06', 'real_after_fixed.jpg', 'FIXED', 'Real photo: object removed'),
+        ('case_07', 'real_after_wrong.jpg', 'SUSPICIOUS', 'Real photo: different spot'),
+    ]
+    before = exif.read_bgr(str(real/'real_before.jpg'))
+    metas = []
+    for case_id, after_name, expected, title in cases:
+        folder = out/case_id
+        folder.mkdir(parents=True, exist_ok=True)
+        # Upright, resized pixels retain the real scene; encoding strips GPS metadata.
+        save_image(folder/'before.jpg', before)
+        save_image(folder/'after.jpg', exif.read_bgr(str(real/after_name)))
+        meta = {'case_id':case_id, 'title':title, 'complaint_id':f'REAL-DEMO-{int(case_id[5:]):04d}',
+                'issue_type':'pothole', 'ward':'Unassigned', 'expected':expected, 'simulated':False,
+                'before_gps':None, 'after_gps':None, 'roi':roi,
+                'source_photo':'real_before.jpg', 'source_after_photo':after_name}
+        (folder/'meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
+        metas.append(meta)
+        print(f'{case_id}: {title}, expected={expected}, simulated=false')
+    return metas
+
+
+def generate(raw: Path, out: Path, mode: str = 'auto', real: Path | None = None) -> list[dict]:
+    """Write simulated cases, optional real photos, and a contact sheet."""
     rois = read_rois(raw)
     out.mkdir(parents=True,exist_ok=True)
     metas = []
@@ -182,6 +208,14 @@ def generate(raw: Path, out: Path, mode: str = 'auto') -> list[dict]:
         (folder/'meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
         metas.append(meta)
         print(f'{case_id}: {name}, {kind}, mask={source}, expected={expected}')
+    if real is not None and real.is_dir():
+        metas.extend(add_real_cases(real,out))
+    elif real is not None:
+        # Original phone files stay local; keep the supplied real demo copies.
+        for case_id in ('case_06', 'case_07'):
+            path = out/case_id/'meta.json'
+            if path.is_file():
+                metas.append(json.loads(path.read_text()))
     preview(out,metas)
     return metas
 
@@ -190,9 +224,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--raw',type=Path,default=ROOT/'data/raw')
     parser.add_argument('--out',type=Path,default=ROOT/'data/demo')
+    parser.add_argument('--real',type=Path,default=ROOT/'data/real',help='optional genuine before/after photos')
     parser.add_argument('--mask-mode',choices=['auto','ellipse'],default='auto',help='auto uses defect_mask whenever it is implemented and nonempty')
     args = parser.parse_args()
-    generate(args.raw,args.out,args.mask_mode)
+    generate(args.raw,args.out,args.mask_mode,args.real)
 
 
 if __name__ == '__main__':

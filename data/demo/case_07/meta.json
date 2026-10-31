@@ -1,0 +1,31 @@
+{
+  "case_id": "case_07",
+  "title": "Real photo: different spot",
+  "complaint_id": "REAL-DEMO-0007",
+  "issue_type": "pothole",
+  "ward": "Unassigned",
+  "expected": "SUSPICIOUS",
+  "simulated": false,
+  "before_gps": null,
+  "after_gps": null,
+  "roi": [
+    [
+      0.39,
+      0.4
+    ],
+    [
+      0.56,
+      0.4
+    ],
+    [
+      0.56,
+      0.51
+    ],
+    [
+      0.39,
+      0.51
+    ]
+  ],
+  "source_photo": "real_before.jpg",
+  "source_after_photo": "real_after_wrong.jpg"
+}

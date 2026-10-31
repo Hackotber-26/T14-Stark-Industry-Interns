@@ -13,7 +13,7 @@ node --test frontend/tests/api.test.mjs
 (cd frontend && npm run build)
 ```
 
-For the prepared development environment, replace the activation command with `source ~/hack/.venv/bin/activate`. When the backend is already running on port 8000, also run `bash scripts/smoke.sh`; it starts no servers and checks all five expected demo verdicts.
+For the prepared development environment, replace the activation command with `source ~/hack/.venv/bin/activate`. When the backend is already running on port 8000, also run `bash scripts/smoke.sh`; it starts no servers and checks all seven expected demo verdicts.
 
 ## Change guidelines
 

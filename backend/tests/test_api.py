@@ -282,3 +282,31 @@ def test_report_generation_failure_removes_temporary_file(client, monkeypatch):
     with pytest.raises(RuntimeError, match='Report generation failed'):
         client.get(f'/api/results/{result["id"]}/report.pdf')
     assert not list(main.RUNS_DIR.glob('report_*.pdf'))
+
+
+
+def test_real_demo_cases_use_only_after_hashes(tmp_path, monkeypatch):
+    from backend.pipeline import dedupe, exif
+    monkeypatch.setenv('FIXCHECK_MOCK_SEG', '1')
+    monkeypatch.setattr(store, 'DB_PATH', tmp_path/'real-demo.db')
+    monkeypatch.setattr(main, 'RUNS_DIR', tmp_path/'runs')
+    main.RUNS_DIR.mkdir()
+    with TestClient(main.app) as real_client:
+        cases = real_client.get('/api/demo').json()
+        assert [case['case_id'] for case in cases] == [f'case_{index:02d}' for index in range(1,8)]
+        assert [case['title'] for case in cases[-2:]] == ['Real photo: object removed', 'Real photo: different spot']
+        assert not any(case['simulated'] for case in cases[-2:])
+        # The same before photo is used twice, but only after evidence is indexed.
+        before_hash = dedupe.phash_hex(exif.read_bgr(str(main.DEMO_DIR/'case_06/before.jpg')))
+        assert all(value != before_hash for _, value in store.all_hashes())
+        assert len(store.all_hashes()) == 7
+        for case_id, expected in [('case_07','SUSPICIOUS'), ('case_06','FIXED')]:
+            response = real_client.post(f'/api/demo/{case_id}/verify')
+            assert response.status_code == 200, response.text
+            result = response.json()
+            assert result['verdict'] == expected, result
+            assert result['simulated'] is False
+            assert result['checks']['location']['status'] == 'skipped'
+            assert result['checks']['duplicate']['status'] == 'pass'
+            assert result['location']['lat'] is None and result['location']['lon'] is None
+            assert result['roi'] == [[0.39,0.40],[0.56,0.40],[0.56,0.51],[0.39,0.51]]
