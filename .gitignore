@@ -1,0 +1,7 @@
+data/runs/
+*.db
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+*.pt

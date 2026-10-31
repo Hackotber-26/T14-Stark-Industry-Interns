@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+opencv-python
+numpy
+pillow
+imagehash
+ultralytics
+pydantic
+pytest
+httpx
+reportlab
+huggingface_hub
