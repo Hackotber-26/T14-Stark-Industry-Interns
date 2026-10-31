@@ -70,5 +70,10 @@
   "timings_ms": {
     "total": 2140
   },
-  "created_at": "2026-11-01T10:42:11Z"
+  "created_at": "2026-11-01T10:42:11Z",
+  "ai_opinion": {
+    "status": "ok",
+    "ai_says": "FIXED",
+    "agrees": true
+  }
 }

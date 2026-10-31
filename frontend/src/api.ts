@@ -12,8 +12,13 @@ export interface CheckResult {
   distance_m?: number | null; inliers?: number | null; inlier_ratio?: number | null
   matched_complaint_id?: string | null; hamming?: number | null; score?: number | null
 }
+export type AiOpinion =
+  | { status: 'ok'; ai_says: string; agrees: boolean }
+  | { status: 'no_damage_recognised'; ai_says?: string | null; agrees?: boolean | null }
+
 export interface VerifyResult {
   id: string; complaint_id: string; case_id: string | null; simulated: boolean
+  ai_opinion?: AiOpinion | null
   verdict: Verdict; confidence: number; percent_resolved: number | null; reasons: string[]
   checks: Record<'location' | 'duplicate' | 'scene' | 'quality', CheckResult>
   explanation: { en: string; kn: string }
