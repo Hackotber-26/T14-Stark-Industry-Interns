@@ -40,3 +40,6 @@ FIXED_MIN_PCT = 85.0
 PARTIAL_MIN_PCT = 25.0
 QUALITY_GOOD = 0.60
 QUALITY_POOR = 0.35
+
+# Optional advisory second opinion; FIXCHECK_NO_AI=1 disables it.
+AI_SECOND_OPINION = True

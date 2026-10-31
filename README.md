@@ -29,6 +29,14 @@ Rules run in the order below. The thresholds live in `backend/pipeline/config.py
 
 GPS passes at up to 30 m, warns up to 75 m, and fails above 75 m. Scene matching uses feature correspondences and a geometric consistency check. A failed scene check stops scoring. A perceptual hash checks for reused photos; demo cases only see earlier numbered demo complaints plus existing real uploads.
 
+## AI second opinion (CLIP)
+
+The AI is advisory only and never changes the verdict.
+
+- On real pothole photos with simulated repairs, CLIP separates the fully repaired example from the unchanged pothole.
+- CLIP misses partial repairs, so it cannot measure how much was repaired; the measurement does that.
+- For the real-photo cases (an object stands in for a pothole), CLIP reports "no pothole recognised"; that is a recognition limit, not proof of no damage.
+
 ## Architecture
 
 ```mermaid

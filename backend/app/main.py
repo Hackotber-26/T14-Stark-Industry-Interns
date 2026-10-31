@@ -1,10 +1,12 @@
 """FixCheck upload, demo, and result API."""
 from contextlib import asynccontextmanager
 import json
+import logging
 import math
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from threading import Thread
 import shutil
 from uuid import uuid4
 import cv2
@@ -37,6 +39,15 @@ def _cases():
     return cases
 
 
+def _warm_up_ai() -> None:
+    """Warm the optional model off the startup path; failures are advisory only."""
+    try:
+        from ..pipeline.ai_check import warm_up
+        warm_up()
+    except Exception:
+        logging.getLogger(__name__).debug('Advisory model warm-up unavailable', exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     for folder, meta in _cases():
@@ -45,6 +56,8 @@ async def lifespan(app: FastAPI):
         except exif.UnreadableImage:
             continue
         store.add_hash(meta['complaint_id'], dedupe.phash_hex(image))
+    if run.ai_enabled():
+        Thread(target=_warm_up_ai, name='advisory-warm-up', daemon=True).start()
     yield
 
 

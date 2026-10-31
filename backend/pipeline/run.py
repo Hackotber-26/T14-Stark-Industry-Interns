@@ -1,14 +1,21 @@
 """Coordinate verification without coupling pipeline modules to HTTP."""
 from datetime import datetime, timezone
+import logging
+import os
 from pathlib import Path
 from time import perf_counter
 import cv2
-from . import align, dedupe, exif, match, score, segment, verdict, explain
+from . import align, config, dedupe, exif, match, score, segment, verdict, explain
 from .types import LatLon, ScoreResult, CheckResult, to_dict
 
 
 class RoiRequired(ValueError):
     """A marked box is required when the model cannot suggest one."""
+
+
+def ai_enabled() -> bool:
+    """Read both advisory switches without requiring the optional model module."""
+    return config.AI_SECOND_OPINION and os.getenv('FIXCHECK_NO_AI') != '1'
 
 
 def verify(before_path: str, after_path: str, complaint_id: str,
@@ -59,12 +66,26 @@ def verify(before_path: str, after_path: str, complaint_id: str,
         images['heatmap'] = write('heatmap', score.heatmap(before, before_mask, after_mask))
     decision = timed('verdict', verdict.decide, location, duplicate, scene.check, measurement)
     explanation = timed('explain', explain.explain, decision, pct)
+    ai_opinion = None
+    if scene.check.status == 'pass' and ai_enabled():
+        try:
+            from .ai_check import ai_second_opinion
+            opinion = timed('ai_second_opinion', ai_second_opinion, before, aligned, roi)
+            if isinstance(opinion, dict):
+                families = {'repaired': 'FIXED', 'partly repaired': 'PARTIAL', 'not repaired': 'NOT_FIXED'}
+                agrees = None
+                if opinion.get('status') == 'ok':
+                    agrees = families.get(opinion.get('ai_says')) == decision.verdict
+                ai_opinion = {**opinion, 'agrees': agrees}
+        except Exception:
+            logging.getLogger(__name__).debug('Advisory second opinion unavailable', exc_info=True)
     timings['total'] = round((perf_counter()-start)*1000, 2)
     return {
         'id': run_id, 'complaint_id': complaint_id, 'case_id': None, 'simulated': False,
         'verdict': decision.verdict, 'confidence': decision.confidence,
         'percent_resolved': pct, 'reasons': decision.reasons,
         'checks': {'location': to_dict(location), 'duplicate': to_dict(duplicate), 'scene': to_dict(scene.check), 'quality': to_dict(quality)},
+        'ai_opinion': ai_opinion,
         'explanation': explanation, 'images': images, 'roi': roi, 'roi_source': roi_source,
         'location': {'lat': before_ll.lat if before_ll else None, 'lon': before_ll.lon if before_ll else None, 'ward': None},
         'timings_ms': timings, 'created_at': datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
